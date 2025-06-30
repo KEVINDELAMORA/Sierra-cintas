@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Control de Inventario de Sierra Cintas</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            transition: all 0.3s ease-in-out;
+        }
+        .btn-delete:hover {
+            background-color: #ef4444; /* red-500 */
+            color: white;
+        }
+        .highlight-exact { 
+            background-color: #d1fae5; /* green-200 */
+            border-left: 4px solid #10b981; /* green-500 */
+        }
+        .highlight-near { 
+            background-color: #fef9c3; /* yellow-200 */
+            border-left: 4px solid #f59e0b; /* amber-500 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Control de Inventario de Sierra Cintas</h1>
+            <p class="text-gray-600 mt-2">Un inventario colaborativo para gestionar tus sierras en tiempo real.</p>
+        </header>
+
+        <main class="grid grid-cols-1 md:grid-cols-3 gap-8">
+            
+            <!-- Form Section -->
+            <div class="md:col-span-1">
+                <div class="card p-6 sticky top-8">
+                    <h2 class="text-2xl font-semibold mb-4 text-gray-800">Agregar Sierra</h2>
+                    <form id="add-blade-form" class="space-y-4">
+                        <div>
+                            <label for="width" class="block text-sm font-medium text-gray-700">Ancho (ej: 1/2, 1 1/4)</label>
+                            <input type="text" id="width" name="width" required 
+                                   placeholder="1/2, 3/4, 1 1/4"
+                                   class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label for="length" class="block text-sm font-medium text-gray-700">Largo (en metros)</label>
+                            <input type="number" id="length" name="length" step="0.01" required
+                                   class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <div>
+                            <label for="quantity" class="block text-sm font-medium text-gray-700">Cantidad</label>
+                            <input type="number" id="quantity" name="quantity" min="1" value="1" required
+                                   class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        </div>
+                        <button type="submit"
+                                class="w-full bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors">
+                            Agregar Sierra
+                        </button>
+                    </form>
+                    <div id="form-message" class="mt-4 text-center text-red-500 text-sm"></div>
+                </div>
+            </div>
+
+            <!-- List Section -->
+            <div class="md:col-span-2">
+                 <h2 class="text-2xl font-semibold mb-4 text-gray-800">Inventario Compartido</h2>
+                 
+                 <!-- Actions Section -->
+                 <div id="actions-container" class="mb-6 card p-4 space-y-4">
+                    <div>
+                        <h3 class="font-semibold text-lg mb-2">Buscar por Largo (metros)</h3>
+                        <div class="flex items-center space-x-2">
+                            <input type="number" id="search-length" placeholder="Ej: 15.5" step="0.01"
+                                   class="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                            <button id="clear-search-btn" class="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-md hover:bg-gray-300 transition-colors">
+                                Limpiar
+                            </button>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-lg mb-2">Exportar</h3>
+                         <button id="export-csv-btn" class="w-full bg-green-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors">
+                            Exportar a Google Sheets (CSV)
+                        </button>
+                    </div>
+                </div>
+
+                <div id="blade-list-container" class="space-y-6">
+                    <!-- Blades will be rendered here -->
+                    <div id="loading-state" class="text-center py-10">
+                        <p class="text-gray-500">Cargando sierras...</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <footer class="text-center mt-12 text-sm text-gray-500">
+            <p>Inventario Público y Compartido</p>
+        </footer>
+
+    </div>
+
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, doc, deleteDoc, setLogLevel, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase Configuration ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' 
+            ? JSON.parse(__firebase_config) 
+            : { apiKey: "DEMO_API_KEY", authDomain: "DEMO_AUTH_DOMAIN", projectId: "DEMO_PROJECT_ID" };
+        
+        // --- COLLABORATION FIX ---
+        const appId = 'inventario-sierras-compartido'; 
+        
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        // --- App State ---
+        let app, auth, db, userId;
+        let unsubscribeFromBlades = null;
+        let allBlades = []; 
+        let currentSearchLength = null;
+
+        // --- DOM Elements ---
+        const addBladeForm = document.getElementById('add-blade-form');
+        const bladeListContainer = document.getElementById('blade-list-container');
+        const loadingState = document.getElementById('loading-state');
+        const formMessage = document.getElementById('form-message');
+        const searchInput = document.getElementById('search-length');
+        const clearSearchBtn = document.getElementById('clear-search-btn');
+        const exportCsvBtn = document.getElementById('export-csv-btn');
+
+        /**
+         * Parses a string that represents a fraction into a decimal.
+         */
+        function parseFraction(str) {
+            if (!str) return NaN;
+            str = str.trim();
+            if (!isNaN(parseFloat(str)) && isFinite(str)) return parseFloat(str);
+            
+            if (str.includes(' ') && str.includes('/')) {
+                const parts = str.split(' ');
+                if (parts.length !== 2) return NaN;
+                const whole = parseInt(parts[0], 10);
+                const fractionParts = parts[1].split('/');
+                if (fractionParts.length !== 2) return NaN;
+                const numerator = parseInt(fractionParts[0], 10);
+                const denominator = parseInt(fractionParts[1], 10);
+                if (isNaN(whole) || isNaN(numerator) || isNaN(denominator) || denominator === 0) return NaN;
+                return whole + (numerator / denominator);
+            } 
+            else if (str.includes('/')) {
+                const fractionParts = str.split('/');
+                if (fractionParts.length !== 2) return NaN;
+                const numerator = parseInt(fractionParts[0], 10);
+                const denominator = parseInt(fractionParts[1], 10);
+                if (isNaN(numerator) || isNaN(denominator) || denominator === 0) return NaN;
+                return numerator / denominator;
+            }
+            return NaN;
+        }
+
+        async function initializeFirebase() {
+            try {
+                app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                setLogLevel('error'); 
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        setupListeners();
+                    } else {
+                        await authenticateUser();
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error initializing Firebase:", error);
+                bladeListContainer.innerHTML = `<p class="text-red-500 text-center">Error al conectar con la base de datos.</p>`;
+            }
+        }
+        
+        async function authenticateUser() {
+            if (initialAuthToken) {
+                try {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                    return; 
+                } catch (error) {
+                    console.log("Custom token authentication failed. Falling back to anonymous sign-in.", error.code);
+                }
+            }
+
+            try {
+                await signInAnonymously(auth);
+            } catch (error) {
+                console.error("Fatal: Could not sign in anonymously.", error);
+                bladeListContainer.innerHTML = `<p class="text-red-500 text-center">Error de autenticación. No se pueden cargar los datos.</p>`;
+            }
+        }
+
+        function setupListeners() {
+            if (!userId) return;
+            if (unsubscribeFromBlades) unsubscribeFromBlades();
+
+            const bladesCollectionRef = collection(db, `artifacts/${appId}/public/data/sawblades`);
+            const q = query(bladesCollectionRef);
+
+            unsubscribeFromBlades = onSnapshot(q, (snapshot) => {
+                allBlades = [];
+                snapshot.forEach((doc) => {
+                    allBlades.push({ id: doc.id, ...doc.data() });
+                });
+                renderBlades();
+            }, (error) => {
+                console.error("Error listening to blades collection: ", error);
+                loadingState.innerHTML = `<p class="text-red-500">Error al cargar los datos. Intenta refrescar la página.</p>`;
+            });
+
+            addBladeForm.addEventListener('submit', handleAddBlade);
+            bladeListContainer.addEventListener('click', handleDeleteBlade);
+            searchInput.addEventListener('input', handleSearch);
+            clearSearchBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                handleSearch();
+            });
+            exportCsvBtn.addEventListener('click', handleExportToCSV);
+        }
+
+        function groupAndSortBlades(blades) {
+            const grouped = blades.reduce((acc, blade) => {
+                const { widthString } = blade;
+                if (!acc[widthString]) acc[widthString] = [];
+                acc[widthString].push(blade);
+                return acc;
+            }, {});
+
+            for (const width in grouped) {
+                grouped[width].sort((a, b) => a.length - b.length);
+            }
+            
+            const sortedGrouped = {};
+            Object.keys(grouped).sort((a, b) => {
+                const groupA = grouped[a];
+                const groupB = grouped[b];
+
+                if (!groupA || groupA.length === 0 || !groupB || groupB.length === 0) return 0;
+                
+                const decimalA = groupA[0].widthDecimal;
+                const decimalB = groupB[0].widthDecimal;
+
+                if (typeof decimalA !== 'number' || typeof decimalB !== 'number') return 0;
+
+                return decimalA - decimalB;
+            }).forEach(key => {
+                sortedGrouped[key] = grouped[key];
+            });
+            return sortedGrouped;
+        }
+
+        function renderBlades() {
+            bladeListContainer.innerHTML = ''; 
+
+            if (allBlades.length === 0) {
+                bladeListContainer.innerHTML = `<div class="text-center py-10 card"><p class="text-gray-600">No hay sierras registradas.</p><p class="text-gray-400 text-sm mt-2">Usa el formulario para agregar tu primera sierra.</p></div>`;
+                return;
+            }
+
+            const groupedBlades = groupAndSortBlades(allBlades);
+
+            for (const widthString in groupedBlades) {
+                const groupContainer = document.createElement('div');
+                groupContainer.className = 'card p-5';
+
+                const groupHeader = document.createElement('h3');
+                groupHeader.className = 'text-xl font-semibold mb-3 border-b pb-2 text-indigo-700';
+                groupHeader.textContent = `Ancho: ${widthString}"`;
+                groupContainer.appendChild(groupHeader);
+
+                const list = document.createElement('ul');
+                list.className = 'space-y-2';
+
+                groupedBlades[widthString].forEach(blade => {
+                    const item = document.createElement('li');
+                    item.className = 'flex justify-between items-center p-2 rounded-md transition-colors';
+
+                    if (currentSearchLength !== null) {
+                        const difference = Math.abs(blade.length - currentSearchLength);
+                        if (difference < 0.001) item.classList.add('highlight-exact');
+                        else if (difference <= 0.101) item.classList.add('highlight-near');
+                    }
+
+                    item.innerHTML = `
+                        <div>
+                            <span class="font-medium">${blade.length} metros</span>
+                            <span class="text-sm text-gray-500 ml-2">(Cantidad: ${blade.quantity})</span>
+                        </div>
+                        <button data-id="${blade.id}" class="btn-delete text-gray-400 hover:text-red-600 p-1 rounded-full transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                    `;
+                    list.appendChild(item);
+                });
+
+                groupContainer.appendChild(list);
+                bladeListContainer.appendChild(groupContainer);
+            }
+        }
+        
+        async function handleAddBlade(e) {
+            e.preventDefault();
+            formMessage.textContent = '';
+
+            const widthString = addBladeForm.width.value;
+            const widthDecimal = parseFraction(widthString);
+            const length = parseFloat(addBladeForm.length.value);
+            const quantity = parseInt(addBladeForm.quantity.value, 10);
+
+            if (isNaN(widthDecimal)) {
+                formMessage.textContent = "El formato del ancho no es válido.";
+                return;
+            }
+
+            if (isNaN(length) || isNaN(quantity) || length <= 0 || quantity <= 0) {
+                formMessage.textContent = "Largo y Cantidad deben ser números válidos.";
+                return;
+            }
+
+            try {
+                const bladesCollectionRef = collection(db, `artifacts/${appId}/public/data/sawblades`);
+                await addDoc(bladesCollectionRef, {
+                    widthString: widthString,
+                    widthDecimal: widthDecimal,
+                    length,
+                    quantity,
+                    createdAt: new Date(),
+                    createdBy: userId
+                });
+                addBladeForm.reset();
+                addBladeForm.quantity.value = 1; 
+            } catch (error) {
+                console.error("Error adding document: ", error);
+                formMessage.textContent = "Error al guardar la sierra.";
+            }
+        }
+
+        async function handleDeleteBlade(e) {
+            const deleteButton = e.target.closest('.btn-delete');
+            if (deleteButton) {
+                const idToDelete = deleteButton.dataset.id;
+                if (idToDelete) {
+                    try {
+                        const docRef = doc(db, `artifacts/${appId}/public/data/sawblades`, idToDelete);
+                        await deleteDoc(docRef);
+                    } catch (error) {
+                        console.error("Error deleting document: ", error);
+                        alert("No se pudo eliminar la sierra. Inténtalo de nuevo.");
+                    }
+                }
+            }
+        }
+
+        function handleSearch() {
+            const searchTerm = searchInput.value;
+            if (searchTerm === '' || isNaN(parseFloat(searchTerm))) {
+                currentSearchLength = null;
+            } else {
+                currentSearchLength = parseFloat(searchTerm);
+            }
+            renderBlades();
+        }
+
+        /**
+         * Generates a CSV file from the inventory data and triggers a download.
+         */
+        function handleExportToCSV() {
+            if (allBlades.length === 0) {
+                alert("El inventario está vacío. No hay nada que exportar.");
+                return;
+            }
+
+            const headers = ['"Ancho"', '"Largo (m)"', '"Cantidad"'];
+            
+            // Sort data for the CSV to match the on-screen display
+            const sortedBlades = [...allBlades].sort((a,b) => {
+                if(a.widthDecimal < b.widthDecimal) return -1;
+                if(a.widthDecimal > b.widthDecimal) return 1;
+                if(a.length < b.length) return -1;
+                if(a.length > b.length) return 1;
+                return 0;
+            });
+            
+            const rows = sortedBlades.map(blade => 
+                [`"${blade.widthString}"`, blade.length, blade.quantity].join(',')
+            );
+            
+            const csvContent = [headers.join(','), ...rows].join('\n');
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            
+            const link = document.createElement("a");
+            if (link.download !== undefined) {
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", "inventario_sierras.csv");
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        }
+        
+        // --- Initial Load ---
+        window.onload = initializeFirebase;
+
+    </script>
+</body>
+</html>
